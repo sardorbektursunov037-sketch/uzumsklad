@@ -44,6 +44,7 @@ import {
 } from '../components/ui'
 import { StatusBadge, ProductCell, FilterBar, DateRangeFilter } from '../components/common'
 import { DevSource } from '../components/DevSource'
+import { chartTheme, tooltipStyle } from '../utils/chartTheme'
 import { PeriodLabel } from '../components/PeriodLabel'
 import { DataViewer } from '../components/DataViewer'
 
@@ -56,6 +57,7 @@ export default function Finance() {
   const lang = i18n.resolvedLanguage
   const { shopIds } = useAuth()
   const { isDark } = useTheme()
+  const ct = chartTheme(isDark)
   const message = useApiMessage()
 
   const [range, setRange] = useState(DEFAULT_RANGE)
@@ -369,40 +371,32 @@ export default function Finance() {
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: -8 }}>
-                <CartesianGrid stroke={isDark ? '#262c3a' : '#e5e7eb'} strokeDasharray="3 3" vertical={false} />
+                <CartesianGrid stroke={ct.grid} strokeDasharray="3 3" vertical={false} />
                 <XAxis
                   dataKey="label"
-                  tick={{ fill: isDark ? '#6b7385' : '#9ca3af', fontSize: 11 }}
-                  axisLine={{ stroke: isDark ? '#262c3a' : '#e5e7eb' }}
+                  tick={{ fill: ct.axis, fontSize: 11 }}
+                  axisLine={{ stroke: ct.grid }}
                   tickLine={false}
                   minTickGap={16}
                 />
                 <YAxis
-                  tick={{ fill: isDark ? '#6b7385' : '#9ca3af', fontSize: 11 }}
+                  tick={{ fill: ct.axis, fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                   width={112}
                   tickFormatter={(v) => money(v, lang, { currency: false })}
                 />
                 <RTooltip
-                  contentStyle={{
-                    background: isDark ? '#14171f' : '#fff',
-                    border: `1px solid ${isDark ? '#262c3a' : '#e5e7eb'}`,
-                    borderRadius: 10,
-                    fontSize: 12,
-                    color: isDark ? '#e8eaef' : '#111827',
-                  }}
+                  contentStyle={tooltipStyle(ct)}
                   formatter={(value, key) => [money(value, lang), t(`finance.${key}`)]}
                 />
                 <Legend
                   iconType="circle"
                   iconSize={8}
-                  formatter={(value) => (
-                    <span style={{ color: isDark ? '#6b7385' : '#9ca3af', fontSize: 11 }}>{t(`finance.${value}`)}</span>
-                  )}
+                  formatter={(value) => <span style={{ color: ct.axis, fontSize: 11 }}>{t(`finance.${value}`)}</span>}
                 />
-                <Bar dataKey="revenue" fill="#7000ff" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                <Line type="monotone" dataKey="profit" stroke="#22c55e" strokeWidth={2} dot={false} />
+                <Bar dataKey="revenue" fill={ct.primary} radius={[6, 6, 0, 0]} maxBarSize={26} />
+                <Line type="monotone" dataKey="profit" stroke={ct.success} strokeWidth={2.5} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
           )}

@@ -27,7 +27,7 @@ export function Topbar({ onOpenMobileNav }) {
   const currentLang = LANGUAGES.find((l) => l.code === i18n.resolvedLanguage) || LANGUAGES[0]
 
   return (
-    <header className="bg-surface/85 border-app sticky top-0 z-20 flex h-14 items-center gap-2 border-b px-3 backdrop-blur-md sm:px-5">
+    <header className="bg-surface/95 border-app sticky top-0 z-20 flex h-14 items-center gap-2 border-b px-3 backdrop-blur-md sm:px-5">
       <button
         type="button"
         onClick={onOpenMobileNav}

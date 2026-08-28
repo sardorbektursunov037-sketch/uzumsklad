@@ -58,9 +58,7 @@ import {
 import { PageHeader, StatCard, Card, CardHeader, EmptyState, ErrorState, Spinner, Segmented } from '../components/ui'
 import { StatusBadge, SchemeBadge, ProductCell, DeadlineCell } from '../components/common'
 import { DevSource } from '../components/DevSource'
-
-/** Grafik uchun rang palitrasi — mavzuga mos keladi */
-const PIE_COLORS = ['#7000ff', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#a855f7', '#64748b']
+import { chartTheme, tooltipStyle } from '../utils/chartTheme'
 
 export default function Dashboard() {
   const { t, i18n } = useTranslation()
@@ -248,8 +246,7 @@ export default function Dashboard() {
     )
   }
 
-  const axisColor = isDark ? '#6b7385' : '#9ca3af'
-  const gridColor = isDark ? '#262c3a' : '#e5e7eb'
+  const ct = chartTheme(isDark)
 
   return (
     <>
@@ -470,34 +467,28 @@ export default function Dashboard() {
                 <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -18 }}>
                   <defs>
                     <linearGradient id="ordersFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#7000ff" stopOpacity={0.28} />
-                      <stop offset="100%" stopColor="#7000ff" stopOpacity={0.02} />
+                      <stop offset="0%" stopColor={ct.primary} stopOpacity={isDark ? 0.32 : 0.24} />
+                      <stop offset="100%" stopColor={ct.primary} stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid stroke={gridColor} strokeDasharray="3 3" vertical={false} />
+                  <CartesianGrid stroke={ct.grid} strokeDasharray="3 3" vertical={false} />
                   <XAxis
                     dataKey="label"
-                    tick={{ fill: axisColor, fontSize: 11 }}
-                    axisLine={{ stroke: gridColor }}
+                    tick={{ fill: ct.axis, fontSize: 11 }}
+                    axisLine={{ stroke: ct.grid }}
                     tickLine={false}
                     interval="preserveStartEnd"
                     minTickGap={16}
                   />
-                  <YAxis tick={{ fill: axisColor, fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} width={40} />
+                  <YAxis tick={{ fill: ct.axis, fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} width={40} />
                   <RTooltip
-                    contentStyle={{
-                      background: isDark ? '#14171f' : '#fff',
-                      border: `1px solid ${gridColor}`,
-                      borderRadius: 10,
-                      fontSize: 12,
-                      color: isDark ? '#e8eaef' : '#111827',
-                    }}
+                    contentStyle={tooltipStyle(ct)}
                     formatter={(value) => [num(value, lang), t('dashboard.ordersCount')]}
                   />
                   <Area
                     type="monotone"
                     dataKey="count"
-                    stroke="#7000ff"
+                    stroke={ct.primary}
                     strokeWidth={2}
                     fill="url(#ordersFill)"
                     dot={false}
@@ -531,24 +522,18 @@ export default function Dashboard() {
                     stroke="none"
                   >
                     {statusData.map((entry, i) => (
-                      <Cell key={entry.status} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      <Cell key={entry.status} fill={ct.pie[i % ct.pie.length]} />
                     ))}
                   </Pie>
                   <RTooltip
-                    contentStyle={{
-                      background: isDark ? '#14171f' : '#fff',
-                      border: `1px solid ${gridColor}`,
-                      borderRadius: 10,
-                      fontSize: 12,
-                      color: isDark ? '#e8eaef' : '#111827',
-                    }}
+                    contentStyle={tooltipStyle(ct)}
                   />
                   <Legend
                     verticalAlign="bottom"
                     height={56}
                     iconType="circle"
                     iconSize={8}
-                    formatter={(value) => <span style={{ color: axisColor, fontSize: 11 }}>{value}</span>}
+                    formatter={(value) => <span style={{ color: ct.axis, fontSize: 11 }}>{value}</span>}
                   />
                 </PieChart>
               </ResponsiveContainer>

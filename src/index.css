@@ -21,22 +21,35 @@
   --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', monospace;
 
   --radius-card: 0.875rem;
-  --shadow-soft: 0 1px 2px rgb(16 24 40 / 0.04), 0 4px 16px -4px rgb(16 24 40 / 0.08);
-  --shadow-pop: 0 8px 32px -8px rgb(16 24 40 / 0.18), 0 2px 8px -2px rgb(16 24 40 / 0.08);
 }
 
-/* ── Semantik ranglar: yorug' rejim asosiy, qorong'i faqat qiymatlarni almashtiradi ── */
+/* ── Semantik ranglar ─────────────────────────────────────────────────
+   Yorug' rejim asosiy, qorong'i faqat qiymatlarni almashtiradi.
+
+   Neytral rang shkalasi toza kulrang emas, balki brend binafshasi tomon
+   ozgina egilgan: shunda oq kartalar sahifa fonidan aniq ajralib turadi
+   va interfeys sovuq "ofis oq"ligiga o'xshab qolmaydi.
+   ------------------------------------------------------------------ */
 :root {
-  --bg: #f7f8fa;
+  /* Sahifa foni — kartalardan sezilarli darajada to'qroq */
+  --bg: #f1f0f7;
   --surface: #ffffff;
-  --surface-2: #f9fafb;
-  --surface-hover: #f3f4f6;
-  --border: #e5e7eb;
-  --border-strong: #d1d5db;
-  --text: #111827;
-  --text-muted: #6b7280;
-  --text-faint: #9ca3af;
+  --surface-2: #f8f7fc;
+  --surface-hover: #eeebf8;
+  --border: #e3e0ee;
+  --border-strong: #cec9e0;
+  --text: #171320;
+  --text-muted: #605a70;
+  --text-faint: #8f89a1;
   --ring: #7000ff;
+
+  /* Soyalar ham binafsha tusda — qora soya yorug' fonda kir ko'rinadi */
+  --shadow-soft: 0 1px 2px rgb(43 26 82 / 0.05), 0 4px 14px -6px rgb(43 26 82 / 0.10);
+  --shadow-pop: 0 12px 32px -10px rgb(43 26 82 / 0.22), 0 2px 8px -2px rgb(43 26 82 / 0.10);
+
+  /* Sahifa ustidagi juda yumshoq rangli yoritish */
+  --page-tint: radial-gradient(60rem 34rem at 8% -12%, rgb(112 0 255 / 0.07), transparent 62%),
+    radial-gradient(48rem 28rem at 102% 4%, rgb(0 149 255 / 0.05), transparent 58%);
 }
 
 .dark {
@@ -50,6 +63,11 @@
   --text-muted: #9aa2b4;
   --text-faint: #6b7385;
   --ring: #9a5fff;
+
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.30), 0 4px 16px -6px rgb(0 0 0 / 0.45);
+  --shadow-pop: 0 14px 40px -12px rgb(0 0 0 / 0.60), 0 2px 8px -2px rgb(0 0 0 / 0.40);
+
+  --page-tint: radial-gradient(60rem 34rem at 8% -12%, rgb(112 0 255 / 0.10), transparent 62%);
 }
 
 @layer base {
@@ -64,6 +82,9 @@
 
   body {
     background-color: var(--bg);
+    background-image: var(--page-tint);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
     color: var(--text);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
