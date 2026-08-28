@@ -49,15 +49,54 @@ export function PageHeader({ title, subtitle, children }) {
  * @param {number} [p.delta] o'zgarish foizi — ijobiy/salbiy strelka
  * @param {string} [p.tone]  'brand' | 'success' | 'warning' | 'danger'
  */
-export function StatCard({ label, value, hint, delta, icon: Icon, tone = 'brand', loading, onClick }) {
-  const tones = {
-    brand: 'bg-brand-50 text-brand-600 dark:bg-brand-950/60 dark:text-brand-400',
-    success: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400',
-    warning: 'bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400',
-    danger: 'bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-400',
-    neutral: 'bg-surface-2 text-muted',
-  }
+/**
+ * Har bir ohang uchun to'plam: ikonka pallasi, yuqoridagi rangli chiziq,
+ * kartaning ichidagi juda yumshoq tovlanish va chegara rangi.
+ *
+ * Oq karta oq fonda yo'qolib ketmasligi uchun ranglar aynan shu yerda
+ * beriladi — ohang ko'rsatkichning ma'nosiga bog'liq (foyda yashil,
+ * xarajat qizil, kutilayotgan sariq, umumiy — brend binafshasi).
+ */
+const STAT_TONES = {
+  brand: {
+    icon: 'bg-brand-100 text-brand-600 dark:bg-brand-950/60 dark:text-brand-400',
+    bar: 'bg-brand-500',
+    tint: 'from-brand-50/80 dark:from-brand-950/30',
+    border: 'border-brand-200/70 dark:border-brand-900/50',
+    hover: 'hover:border-brand-400 dark:hover:border-brand-700',
+  },
+  success: {
+    icon: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400',
+    bar: 'bg-emerald-500',
+    tint: 'from-emerald-50/80 dark:from-emerald-950/25',
+    border: 'border-emerald-200/70 dark:border-emerald-900/50',
+    hover: 'hover:border-emerald-400 dark:hover:border-emerald-700',
+  },
+  warning: {
+    icon: 'bg-amber-100 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400',
+    bar: 'bg-amber-500',
+    tint: 'from-amber-50/80 dark:from-amber-950/25',
+    border: 'border-amber-200/70 dark:border-amber-900/50',
+    hover: 'hover:border-amber-400 dark:hover:border-amber-700',
+  },
+  danger: {
+    icon: 'bg-red-100 text-red-600 dark:bg-red-950/50 dark:text-red-400',
+    bar: 'bg-red-500',
+    tint: 'from-red-50/80 dark:from-red-950/25',
+    border: 'border-red-200/70 dark:border-red-900/50',
+    hover: 'hover:border-red-400 dark:hover:border-red-700',
+  },
+  neutral: {
+    icon: 'bg-surface-2 text-muted',
+    bar: 'bg-[var(--border-strong)]',
+    tint: 'from-transparent',
+    border: 'border-app',
+    hover: 'hover:border-app-strong',
+  },
+}
 
+export function StatCard({ label, value, hint, delta, icon: Icon, tone = 'brand', loading, onClick }) {
+  const t = STAT_TONES[tone] || STAT_TONES.brand
   const Wrapper = onClick ? 'button' : 'div'
 
   return (
@@ -65,46 +104,57 @@ export function StatCard({ label, value, hint, delta, icon: Icon, tone = 'brand'
       type={onClick ? 'button' : undefined}
       onClick={onClick}
       className={cx(
-        'bg-surface rounded-[--radius-card] border p-4 text-left shadow-soft transition-colors',
-        onClick && 'hover:border-brand-300 dark:hover:border-brand-800 cursor-pointer',
+        'bg-surface relative overflow-hidden rounded-[--radius-card] border p-4 text-left shadow-soft transition-colors',
+        t.border,
+        onClick && cx('cursor-pointer', t.hover),
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-muted text-[13px] font-medium">{label}</p>
-        {Icon && (
-          <span className={cx('grid size-8 shrink-0 place-items-center rounded-lg', tones[tone])}>
-            <Icon size={16} aria-hidden />
-          </span>
-        )}
-      </div>
+      {/* Yuqoridagi rangli chiziq — kartani bir qarashda ajratadi */}
+      <span className={cx('absolute inset-x-0 top-0 h-[3px]', t.bar)} aria-hidden />
+      {/* Yumshoq rangli tovlanish — oq fon tekis bo'lib qolmasligi uchun */}
+      <span
+        className={cx('pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b to-transparent', t.tint)}
+        aria-hidden
+      />
 
-      {loading ? (
-        <Skeleton className="mt-2.5 h-7 w-24" />
-      ) : (
-        <p
-          className={cx(
-            'text-app tabular mt-1.5 leading-tight font-semibold break-words',
-            valueSizeClass(value),
+      <div className="relative">
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-muted text-[13px] font-medium">{label}</p>
+          {Icon && (
+            <span className={cx('grid size-8 shrink-0 place-items-center rounded-lg', t.icon)}>
+              <Icon size={16} aria-hidden />
+            </span>
           )}
-          title={typeof value === 'string' ? value : undefined}
-        >
-          {value}
-        </p>
-      )}
+        </div>
 
-      <div className="mt-1 flex items-center gap-2">
-        {typeof delta === 'number' && Number.isFinite(delta) && (
-          <span
+        {loading ? (
+          <Skeleton className="mt-2.5 h-7 w-24" />
+        ) : (
+          <p
             className={cx(
-              'inline-flex items-center gap-0.5 text-[12px] font-medium',
-              delta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
+              'text-app tabular mt-1.5 leading-tight font-semibold break-words',
+              valueSizeClass(value),
             )}
+            title={typeof value === 'string' ? value : undefined}
           >
-            {delta >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-            {Math.abs(delta).toFixed(1)}%
-          </span>
+            {value}
+          </p>
         )}
-        {hint && <span className="text-faint truncate text-[12px]">{hint}</span>}
+
+        <div className="mt-1 flex items-center gap-2">
+          {typeof delta === 'number' && Number.isFinite(delta) && (
+            <span
+              className={cx(
+                'inline-flex items-center gap-0.5 text-[12px] font-medium',
+                delta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
+              )}
+            >
+              {delta >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+              {Math.abs(delta).toFixed(1)}%
+            </span>
+          )}
+          {hint && <span className="text-faint truncate text-[12px]">{hint}</span>}
+        </div>
       </div>
     </Wrapper>
   )
