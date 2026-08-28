@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="uz">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/uzum-mark.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Uzum Market sotuvchilari uchun sklad, buyurtma va moliya boshqaruv paneli" />
+    <meta name="theme-color" content="#7000ff" />
+    <title>Uzum Sklad</title>
+    <script>
+      // Tema flash (FOUC) ni oldini olish — React yuklanmasdan oldin qo'llaniladi
+      (function () {
+        try {
+          var s = localStorage.getItem('uzum.theme') || 'system'
+          var dark = s === 'dark' || (s === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.classList.toggle('dark', dark)
+          document.documentElement.lang = localStorage.getItem('uzum.lang') || 'uz'
+        } catch (e) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
