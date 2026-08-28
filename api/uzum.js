@@ -5,13 +5,15 @@
  * uzoq ishlaydigan Express serveri bo'lmaydi: har bir so'rov alohida
  * funksiya sifatida ishga tushadi.
  *
- *   brauzer  ->  /api/uzum/v1/shops
- *   bu fayl  ->  https://api-seller.uzum.uz/api/seller-openapi/v1/shops
- *                Authorization: <token>   (Bearer prefiksisiz)
+ * Marshrutlash: `vercel.json` dagi rewrite `/api/uzum/<yo'l>` ni
+ * `/api/uzum?__path=<yo'l>` ga aylantiradi. Katalog ichidagi catch-all
+ * (`[...path].js`) ko'p segmentli yo'llarni ishonchli ushlamagani uchun
+ * shu aniq usul tanlangan.
  *
- * Token ikki manbadan olinadi:
- *   1. Brauzer yuborgan `X-Uzum-Token` sarlavhasi
- *   2. Muhit o'zgaruvchisi `UZUM_API_TOKEN` (ochiq deploy uchun tavsiya etilmaydi)
+ *   brauzer  ->  /api/uzum/v1/shops?shopIds=1
+ *   rewrite  ->  /api/uzum?__path=v1/shops&shopIds=1
+ *   bu fayl  ->  https://api-seller.uzum.uz/api/seller-openapi/v1/shops?shopIds=1
+ *                Authorization: <token>   (Bearer prefiksisiz)
  */
 import {
   ALLOWED_METHODS,
@@ -21,7 +23,7 @@ import {
   buildUpstreamUrl,
   clientIp,
   rateLimit,
-} from '../_lib/proxy.js'
+} from './_lib/proxy.js'
 
 const SERVER_TOKEN = process.env.UZUM_API_TOKEN || ''
 
@@ -46,6 +48,15 @@ async function getBody(req) {
   return Buffer.concat(chunks)
 }
 
+/** Rewrite qo'shgan `__path` ni ajratib, qolgan parametrlarni saqlab qoladi */
+function originalPath(req) {
+  const u = new URL(req.url, 'http://localhost')
+  const path = u.searchParams.get('__path') || ''
+  u.searchParams.delete('__path')
+  const qs = u.searchParams.toString()
+  return `/api/uzum/${path}${qs ? `?${qs}` : ''}`
+}
+
 export default async function handler(req, res) {
   // Bu manzil boshqa saytlardan chaqirilmasligi kerak — CORS sarlavhalari qo'yilmaydi
   res.setHeader('cache-control', 'no-store')
@@ -63,7 +74,7 @@ export default async function handler(req, res) {
     return
   }
 
-  const built = buildUpstreamUrl(req.url)
+  const built = buildUpstreamUrl(originalPath(req))
   if (built.error) {
     res.status(400).json(apiError('BAD_PATH', built.error))
     return
@@ -78,7 +89,7 @@ export default async function handler(req, res) {
         'NO_TOKEN',
         SERVER_TOKEN && !ALLOW_SERVER_TOKEN
           ? "Serverda token bor, lekin ochiq deployda o'chirilgan. Yoqish uchun ALLOW_SERVER_TOKEN=1 qo'ying yoki tokenni ilovada kiriting."
-          : "API token berilmagan. Sozlamalarda tokenni kiriting.",
+          : 'API token berilmagan. Sozlamalarda tokenni kiriting.',
       ),
     )
     return
