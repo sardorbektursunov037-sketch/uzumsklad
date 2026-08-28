@@ -32,6 +32,88 @@ npm run build
 npm run server
 ```
 
+### Vercel'ga joylash
+
+Vercel'da uzoq ishlaydigan Express serveri bo'lmaydi, shuning uchun proxy
+serverless funksiya sifatida `api/` papkasida turadi:
+
+| Fayl | Vazifasi |
+|---|---|
+| `api/uzum/[...path].js` | `/api/uzum/*` → Uzum API |
+| `api/config.js` | Serverda token bor-yo'qligini aytadi |
+| `api/_lib/proxy.js` | Ikkala proxy uchun umumiy xavfsizlik qatlami |
+| `vercel.json` | SPA marshrutlari + xavfsizlik sarlavhalari |
+
+#### Muhit o'zgaruvchilari
+
+**Hech narsa qo'yish shart emas** — standart qiymatlar to'g'ri ishlaydi.
+Quyidagilar faqat kerak bo'lganda:
+
+| O'zgaruvchi | Standart | Qachon kerak |
+|---|---|---|
+| `UZUM_API_BASE` | `https://api-seller.uzum.uz` | Uzum manzili o'zgarsa |
+| `UZUM_API_PREFIX` | `/api/seller-openapi` | API prefiksi o'zgarsa |
+| `UZUM_API_TOKEN` | *(bo'sh)* | **Ochiq deployda qo'ymang** — pastga qarang |
+| `ALLOW_SERVER_TOKEN` | *(bo'sh)* | Serverdagi tokenni ishlatish uchun `1` |
+
+---
+
+## Xavfsizlik
+
+Ilova ochiq manzilga joylanganda (masalan Vercel) quyidagilar amal qiladi.
+
+#### Token
+
+Token **brauzerda** saqlanadi va faqat `X-Uzum-Token` sarlavhasida shu
+ilovaning o'z proxy'siga yuboriladi. Har bir foydalanuvchi o'z tokenini
+kiritadi — birov boshqasining ma'lumotini ko'rmaydi.
+
+> `UZUM_API_TOKEN` ni ochiq deployga qo'ymang. Qo'ysangiz, havolani bilgan
+> **har kim** sizning do'kon, buyurtma va moliya ma'lumotlaringizni ko'radi.
+> Shuning uchun u qo'shimcha `ALLOW_SERVER_TOKEN=1` bo'lmasa ishlamaydi.
+
+#### Proxy himoyasi
+
+| Chora | Tafsilot |
+|---|---|
+| Metod cheklovi | Faqat `GET` va `POST`; qolganlari → 405 |
+| Yo'l tekshiruvi | Faqat `/v1`, `/v2`, `/v3`; `..` va kodlangan variantlari → 400 |
+| Manzil doirasi | Yakuniy URL `api-seller.uzum.uz` ichida qolishi majburiy |
+| Sarlavha filtri | Yuqoriga faqat `content-type`, `accept`, `accept-language` uzatiladi |
+| Tana hajmi | 2 MB dan katta so'rov → 413 |
+| Chastota | Bitta IP uchun daqiqasiga 240 so'rov → 429 |
+| CORS | Yo'q — proxy boshqa saytlardan chaqirilmaydi |
+| Kesh | `no-store` — javoblar oraliq keshlarda qolmaydi |
+
+#### Sarlavhalar
+
+`Content-Security-Policy` (skript faqat `'self'`), `X-Frame-Options: DENY`,
+`X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`,
+`Permissions-Policy` (kamera/mikrofon/geolokatsiya o'chirilgan),
+`Strict-Transport-Security`.
+
+#### Kirishni cheklash
+
+Eng ishonchli yo'l — Vercel'ning o'z himoyasi:
+**Project → Settings → Deployment Protection → Password Protection**.
+U kodgacha, chekkada ishlaydi.
+
+Ilova faqat o'zingiz uchun bo'lsa, uni ochiq internetga chiqarmay
+`npm run start` bilan lokal ishlatish xavfsizroq.
+
+---|---|
+| `api/uzum/[...path].js` | `/api/uzum/*` → Uzum API (`server/index.js` bilan bir xil) |
+| `api/config.js` | Serverda token bor-yo'qligini aytadi |
+| `vercel.json` | SPA marshrutlari `index.html` ga yo'naltiriladi, `/api/*` funksiyalarga |
+
+Muhit o'zgaruvchilari Vercel → Settings → Environment Variables da
+qo'yiladi (`UZUM_API_BASE`, `UZUM_API_PREFIX`, `UZUM_API_TOKEN`).
+
+> **Diqqat:** Vercel manzili ochiq bo'ladi. `UZUM_API_TOKEN` ni Vercel'ga
+> qo'ysangiz, havolani bilgan **har kim** sizning do'kon ma'lumotlaringizni
+> ko'radi. Uni bo'sh qoldiring — shunda har bir foydalanuvchi o'z tokenini
+> kiritadi va u faqat o'sha brauzerda saqlanadi.
+
 ---
 
 ## Nima uchun proxy kerak

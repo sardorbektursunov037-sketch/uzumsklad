@@ -13,44 +13,91 @@
 import 'dotenv/config'
 import express from 'express'
 import compression from 'compression'
-import cors from 'cors'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import {
+  ALLOWED_METHODS,
+  FORWARD_HEADERS,
+  MAX_BODY_BYTES,
+  apiError,
+  buildUpstreamUrl,
+  clientIp,
+  rateLimit,
+  API_BASE,
+  API_PREFIX,
+} from '../api/_lib/proxy.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
 
 const PORT = Number(process.env.PORT || 3000)
-const API_BASE = (process.env.UZUM_API_BASE || 'https://api-seller.uzum.uz').replace(/\/+$/, '')
-const API_PREFIX = process.env.UZUM_API_PREFIX || '/api/seller-openapi'
 const SERVER_TOKEN = process.env.UZUM_API_TOKEN || ''
-const ORIGINS = (process.env.CORS_ORIGIN || '')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean)
 
 const app = express()
 app.disable('x-powered-by')
+app.set('trust proxy', 1)
 app.use(compression())
-app.use(cors({ origin: ORIGINS.length ? ORIGINS : true, credentials: false }))
+
+/* ── Xavfsizlik sarlavhalari ──────────────────────────────────────── */
+
+app.use((_req, res, next) => {
+  res.setHeader('x-content-type-options', 'nosniff')
+  res.setHeader('x-frame-options', 'DENY')
+  res.setHeader('referrer-policy', 'no-referrer')
+  res.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=(), interest-cohort=()')
+  res.setHeader('cross-origin-opener-policy', 'same-origin')
+  res.setHeader(
+    'content-security-policy',
+    [
+      "default-src 'self'",
+      "base-uri 'self'",
+      "frame-ancestors 'none'",
+      "object-src 'none'",
+      "form-action 'self'",
+      "script-src 'self'",
+      // Recharts va React inline uslub qo'yadi
+      "style-src 'self' 'unsafe-inline'",
+      // Mahsulot rasmlari Uzum CDN'idan keladi
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data:",
+      "connect-src 'self'",
+      "worker-src 'self' blob:",
+    ].join('; '),
+  )
+  next()
+})
+
+/* ── Uzum proxy ───────────────────────────────────────────────────── */
 
 // Uzum javoblarining ba'zilari application/pdf, ba'zilari */* — shuning uchun
 // tanani xom holda o'qiymiz va o'zgartirmasdan uzatamiz.
-app.use('/api/uzum', express.raw({ type: '*/*', limit: '10mb' }))
-
-/** Klientdan serverga uzatilishi mumkin bo'lgan sarlavhalar (allowlist). */
-const FORWARD_HEADERS = ['content-type', 'accept', 'accept-language']
+app.use('/api/uzum', express.raw({ type: '*/*', limit: MAX_BODY_BYTES }))
 
 app.all('/api/uzum/*', async (req, res) => {
-  const token = req.get('x-uzum-token') || SERVER_TOKEN
-  if (!token) {
-    return res.status(401).json({
-      errors: [{ code: 'NO_TOKEN', message: 'API token berilmagan. Sozlamalarda tokenni kiriting yoki .env faylida UZUM_API_TOKEN ni to\'ldiring.' }],
-    })
+  res.setHeader('cache-control', 'no-store')
+
+  if (!ALLOWED_METHODS.has(req.method)) {
+    return res.status(405).json(apiError('METHOD_NOT_ALLOWED', 'Faqat GET va POST qabul qilinadi'))
   }
 
-  const suffix = req.originalUrl.replace(/^\/api\/uzum/, '')
-  const url = `${API_BASE}${API_PREFIX}${suffix}`
+  const limit = rateLimit(clientIp(req))
+  if (!limit.ok) {
+    res.setHeader('retry-after', '60')
+    return res.status(429).json(apiError('RATE_LIMITED', "So'rovlar juda ko'p. Biroz kuting."))
+  }
+
+  const built = buildUpstreamUrl(req.originalUrl)
+  if (built.error) {
+    return res.status(400).json(apiError('BAD_PATH', built.error))
+  }
+
+  const token = req.get('x-uzum-token') || SERVER_TOKEN
+  if (!token) {
+    return res
+      .status(401)
+      .json(apiError('NO_TOKEN', "API token berilmagan. Sozlamalarda tokenni kiriting yoki .env faylida UZUM_API_TOKEN ni to'ldiring."))
+  }
 
   const headers = { Authorization: token }
   for (const h of FORWARD_HEADERS) {
@@ -58,12 +105,12 @@ app.all('/api/uzum/*', async (req, res) => {
     if (v) headers[h] = v
   }
 
-  const hasBody = !['GET', 'HEAD'].includes(req.method) && req.body?.length
+  const hasBody = req.method === 'POST' && req.body?.length
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 60_000)
 
   try {
-    const upstream = await fetch(url, {
+    const upstream = await fetch(built.url, {
       method: req.method,
       headers,
       body: hasBody ? req.body : undefined,
@@ -77,16 +124,15 @@ app.all('/api/uzum/*', async (req, res) => {
     const cd = upstream.headers.get('content-disposition')
     if (cd) res.set('content-disposition', cd)
 
-    const buf = Buffer.from(await upstream.arrayBuffer())
-    res.send(buf)
+    res.send(Buffer.from(await upstream.arrayBuffer()))
   } catch (err) {
     const aborted = err?.name === 'AbortError'
-    res.status(aborted ? 504 : 502).json({
-      errors: [{
-        code: aborted ? 'UPSTREAM_TIMEOUT' : 'UPSTREAM_ERROR',
-        message: aborted ? 'Uzum API javob bermadi (timeout).' : `Uzum API bilan bog'lanib bo'lmadi: ${err.message}`,
-      }],
-    })
+    res.status(aborted ? 504 : 502).json(
+      apiError(
+        aborted ? 'UPSTREAM_TIMEOUT' : 'UPSTREAM_ERROR',
+        aborted ? 'Uzum API javob bermadi (timeout).' : "Uzum API bilan bog'lanib bo'lmadi.",
+      ),
+    )
   } finally {
     clearTimeout(timer)
   }
@@ -94,6 +140,7 @@ app.all('/api/uzum/*', async (req, res) => {
 
 // Serverda token bor-yo'qligini bilish — UI login ekranini o'tkazib yuborishi mumkin
 app.get('/api/config', (_req, res) => {
+  res.setHeader('cache-control', 'no-store')
   res.json({ serverToken: Boolean(SERVER_TOKEN), apiBase: API_BASE + API_PREFIX })
 })
 
