@@ -17,9 +17,9 @@ const TOKEN_KEY = 'uzum.token'
 /* ── Navbat sozlamalari ───────────────────────────────────────────── */
 
 /** Bir vaqtda ketadigan so'rovlar soni */
-const MAX_CONCURRENT = 2
+const MAX_CONCURRENT = 3
 /** So'rovlar orasidagi eng kam tanaffus (ms) */
-const MIN_GAP_MS = 250
+const MIN_GAP_MS = 150
 /** 429/503 da necha marta qayta urinish */
 const MAX_RETRIES = 6
 /** Birinchi qayta urinishgacha kutish (ms), keyin ikkilanadi */

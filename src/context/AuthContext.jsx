@@ -9,10 +9,10 @@ const AuthContext = createContext(null)
 /**
  * Autentifikatsiya va do'kon konteksti.
  *
- * Token ikki manbadan kelishi mumkin:
- *  1. Foydalanuvchi kiritgan token (localStorage)
- *  2. Serverning .env faylidagi UZUM_API_TOKEN — u holda brauzerda token
- *     umuman bo'lmaydi, /api/config `serverToken: true` qaytaradi.
+ * Foydalanuvchi xom Uzum API tokenini bilmaydi — faqat login/parol bilan
+ * kiradi (`loginWithCredentials`). Server `/api/login`da login/parolni
+ * tekshiradi va to'g'ri bo'lsa `.env`dagi UZUM_API_TOKEN'ni bir marta
+ * qaytaradi, u shu yerda odatdagi `login()` orqali localStorage'ga saqlanadi.
  */
 export function AuthProvider({ children }) {
   const [token, setTokenState] = useState(() => getToken())
@@ -46,7 +46,9 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const authenticated = Boolean(token) || serverToken
+  // Login/parol majburiy — server tokeni bo'lishi o'zi hali autentifikatsiya
+  // qilinganini bildirmaydi, u faqat `/api/login` orqali brauzerga tushadi.
+  const authenticated = Boolean(token)
 
   /** Do'konlarni yuklash — bu bir vaqtning o'zida tokenni tekshirish ham. */
   const loadShops = useCallback(async (signal) => {
@@ -101,6 +103,30 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  /**
+   * Login/parolni serverga tekshirtiradi — to'g'ri bo'lsa server haqiqiy
+   * Uzum tokenini qaytaradi, u odatdagi `login()` orqali saqlanadi.
+   */
+  const loginWithCredentials = useCallback(
+    async (username, password) => {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        const first = Array.isArray(data?.errors) ? data.errors[0] : null
+        const err = new Error(first?.message || 'Login yoki parol noto‘g‘ri')
+        err.status = res.status
+        err.code = first?.code
+        throw err
+      }
+      return login(data.token)
+    },
+    [login],
+  )
+
   const logout = useCallback(() => {
     persistToken('')
     setTokenState('')
@@ -125,6 +151,7 @@ export function AuthProvider({ children }) {
       authenticated,
       ready,
       login,
+      loginWithCredentials,
       logout,
       shops,
       shopsLoading,
@@ -142,6 +169,7 @@ export function AuthProvider({ children }) {
       authenticated,
       ready,
       login,
+      loginWithCredentials,
       logout,
       shops,
       shopsLoading,

@@ -153,6 +153,10 @@ Serverda token bo'lsa `/api/config` buni aytadi va kirish ekrani chetlab o'tilad
 | **Qaytarishlar** | `/v1/shop/{id}/return`, `/v1/shop/{id}/return/{returnId}`, `/v1/return` | Ro'yxat, tarkib, tafsilot paneli |
 | **Sotuvlar** | `/v1/finance/orders`, `/v1/finance/expenses` | Tushum/foyda grafigi, komissiya va logistika, sof foyda, rentabellik, o'rtacha chek |
 | **Xarajatlar** | `/v1/finance/expenses` | Kirim/chiqim, manba bo'yicha filtr, balans |
+| **Tovar aylanmasi** | `/v1/invoice`, `/v1/finance/orders`, `/v3/fbs/sku/stocks` | Kirim · sotuv · qaytarish · qoldiq bir jadvalda, kunlik o'rtacha sotuv, «necha kunga yetadi», tugayotgan SKU filtri |
+| **Muammoli buyurtmalar** | `/v2/fbs/orders` (9 status) | Qabul/yetkazish muddati o'tgan, tugallanmagan, punktda olinmagan, yo'lda qotgan, bekor qilinayotgan va qaytarilganlar — tur bo'yicha tab va CSV |
+| **Komissioner hisoboti** | `/v1/finance/orders` | Komissiya savdosi hujjati: sotuv, qaytarish, komissiya mukofoti, logistika, komitentga hisoblangan va to'lanmagan qoldiq. SKU / buyurtma / oy kesimi, CSV va chop etish |
+| **Foyda va zarar** | `/v1/finance/orders`, `/v1/finance/expenses` | Tushum → daromad → yalpi foyda → operatsion foyda → sof foyda ketma-ketligi, oylik dinamika, xarajatlar taqsimoti |
 | **Sozlamalar** | `/v1/shops` | Mavzu, til, jadval zichligi, token, ulanish testi |
 
 ### Tovarlarni kuzatib borish
@@ -168,6 +172,103 @@ kartani ochadi:
 - **Jonli FBS qoldig'i** — `/v3/fbs/sku/stocks` dan kursor orqali olinadi
 - **Sotuvlar tarixi** — oxirgi 90 kun (`/v1/finance/orders`)
 - **Qaytarishlar tarixi** — `/v1/return` dan shu SKU bo'yicha filtrlangan
+
+---
+
+## Hisobotlar qanday hisoblanadi
+
+Uzum Seller API tayyor hisobot bermaydi — quyidagi to'rt bo'lim uning xom
+ma'lumotidan hisoblanadi. Har bir sahifada **Dev manba** belgisi bor
+(Sozlamalar → Ko'rinish → Dev rejim): u qaysi endpoint, qanday parametr bilan
+chaqirilganini va nechta yozuv kelganini ko'rsatadi.
+
+### Komissioner hisoboti
+
+`/v1/finance/orders` javobidagi pozitsiyalar davr bo'yicha yig'iladi:
+
+| Ko'rsatkich | Formula / manba |
+|---|---|
+| Sotuv summasi | `sellPrice` (yoki `sellerPrice`) yig'indisi |
+| Qaytarish summasi | `amountReturns` × birlik narx — API alohida summa bermaydi |
+| Sof savdo | Sotuv − Qaytarish |
+| Komissiya mukofoti | `commission` |
+| Yetkazib berish | `logisticDeliveryFee` |
+| Tannarx | `purchasePrice`, «o'z tannarxim» kiritilgan bo'lsa — o'sha |
+| Komitentga hisoblangan | `sellerProfit` (Uzumning o'z hisobi) |
+| To'langan | `withdrawnProfit` |
+| To'lanmagan qoldiq | Hisoblangan − To'langan |
+
+### Muammoli buyurtmalar
+
+API'da «muammoli» filtri yo'q, shuning uchun status va muddatlardan
+hisoblanadi (`utils/format.js` → `orderProblems`):
+
+| Tur | Shart |
+|---|---|
+| Qabul muddati o'tgan | `CREATED`, `acceptUntil` < hozir |
+| Tugallanmagan | `CREATED`/`PACKING` da 5 kundan ortiq |
+| Yetkazish muddati o'tgan | `deliverUntil` < hozir, buyurtma yopilmagan |
+| Yo'lda qotib qolgan | `DELIVERING`/`PENDING_DELIVERY` da 7 kundan ortiq |
+| O'z vaqtida olinmagan | punktda 5 kundan ortiq |
+| Bekor qilinmoqda | `PENDING_CANCELLATION` |
+| Qaytarilgan | `RETURNED` |
+
+Chegaralar `STUCK_DAYS`, `TRANSIT_DAYS`, `PICKUP_DAYS` doimiylarida.
+`COMPLETED` va `CANCELED` skanerlanmaydi — ular harakat talab qilmaydi.
+
+### Foyda va zarar
+
+```
+Tushum − Qaytarishlar                                  = Daromad
+Daromad − Tannarx                                      = Yalpi foyda
+Yalpi foyda − (komissiya + logistika + xarajatlar)     = Operatsion foyda
+Operatsion foyda − Soliqlar                            = Sof foyda
+```
+
+`/v1/finance/expenses` dagi **`INCOME` to'lovlar daromadga qo'shilmaydi** —
+ular hisobga yechib olingan foyda, ya'ni allaqachon sanalgan pulning
+ko'chirilishi. Soliq qatoriga manba nomida `soliq / налог / QQS / tax`
+uchraganlar tushadi: Uzum API soliq uchun alohida belgi bermaydi, shuning
+uchun sahifada xarajatlar manba bo'yicha ochib ko'rsatiladi.
+
+### Tovar aylanmasi
+
+Uchta endpoint bitta jadvalga birlashtiriladi:
+
+| Ustun | Manba |
+|---|---|
+| Kirim | `/v1/invoice` → `productForInvoiceDto.quantityAccepted` |
+| Sotilgan / Qaytarilgan | `/v1/finance/orders` → `amount`, `amountReturns` |
+| Joriy qoldiq | `/v3/fbs/sku/stocks` → `amount` |
+
+Uchala manbada **yagona SKU kaliti yo'q**: birida shtrix-kod bor, boshqasida
+faqat nom. Shuning uchun `utils/skuMatch.js` har bir yozuv uchun bir nechta
+nomzod kalit (shtrix-kod → sotuvchi kodi → `skuId` → nom) hisoblab, bittasi
+mos kelganlarni union-find orqali bitta guruhga qo'shadi.
+
+Ikki ogohlantirish: **joriy qoldiq** davrga bog'liq emas (u hozirgi holat),
+va `/v1/invoice` sana parametrini qabul qilmaydi — xatlar `dateAccepted`
+bo'yicha brauzerda filtrlanadi.
+
+---
+
+## Uzum API nimani bermaydi
+
+Loyiha faqat Uzum API qaytargan ma'lumot ustida ishlaydi. Quyidagilar
+Uzum Seller OpenAPI'da **umuman yo'q**, shuning uchun bu bo'limlar ham yo'q:
+
+- Kontragentlar, shartnomalar, o'z omborlaringiz
+- Yetkazib beruvchilarga buyurtmalar, xaridlarni boshqarish
+- Kassa, to'lovlar, pul oqimi, o'zaro hisob-kitoblar
+- Tannarxli kirim hujjati (оприходование), tovar guruhlari, to'plamlar
+
+Ular uchun alohida ma'lumot bazasi kerak bo'ladi — bu Uzum ma'lumotini
+ko'rsatish emas, o'z buxgalteriyangizni yuritish demak.
+
+Tannarx bo'yicha yagona istisno: `sendPriceData` faqat sotuv narxini
+o'zgartiradi, tannarxni yozib bo'lmaydi. Shuning uchun «o'z tannarxim»
+brauzerda saqlanadi (`useCostOverride`) va Rentabellik, Komissioner
+hisoboti hamda Foyda va zarar sahifalarida hisobga olinadi.
 
 ---
 
@@ -193,6 +294,7 @@ src/
 ├─ api/
 │  ├─ client.js       fetch o'rami: token, query, xato normalizatsiyasi, blob
 │  ├─ endpoints.js    38 ta endpoint — swagger bo'limlari bo'yicha guruhlangan
+│  ├─ bulk.js         hisobotlar uchun «barcha sahifani yuklash» qatlami
 │  └─ constants.js    enum qiymatlari va ularning ranglari
 ├─ i18n/              uz · ru · en (interfeys + 179 ta API maydon nomi)
 ├─ context/           Theme (yorug'/qorong'i/tizim), Auth (token + do'kon), Toast
@@ -203,8 +305,10 @@ src/
 │  ├─ DataViewer.jsx  «Barcha ma'lumotlar» rekursiv ko'rinishi
 │  ├─ ProductTracking.jsx  SKU kuzatuv kartasi
 │  └─ layout/         Sidebar, Topbar, AppLayout
-├─ pages/             10 ta sahifa
-└─ utils/format.js    pul, sana, muddat, base64→PDF
+├─ pages/             14 ta sahifa
+└─ utils/
+   ├─ format.js       pul, sana, muddat, base64→PDF, buyurtma muammolari
+   └─ skuMatch.js     turli endpointdagi bir xil SKU ni birlashtirish (union-find)
 server/index.js       production proxy + SPA
 ```
 

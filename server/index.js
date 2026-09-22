@@ -4,8 +4,9 @@
  * Nima uchun kerak:
  *   Uzum Seller OpenAPI (api-seller.uzum.uz) brauzerdan kelgan so'rovlar uchun
  *   CORS sarlavhalarini qaytarmaydi. Shu sababli barcha so'rovlar shu server
- *   orqali o'tkaziladi. Bundan tashqari, agar .env da UZUM_API_TOKEN berilgan
- *   bo'lsa, token umuman brauzerga tushmaydi.
+ *   orqali o'tkaziladi. Foydalanuvchi xom tokenni bilmaydi — `/api/login`
+ *   orqali login/parol bilan kiradi, server esa `.env`dagi UZUM_API_TOKEN'ni
+ *   shundagina brauzerga bir marta beradi.
  *
  * Ishga tushirish:  npm run start   (build + server)
  *                   npm run server  (faqat server)
@@ -27,6 +28,7 @@ import {
   API_BASE,
   API_PREFIX,
 } from '../api/_lib/proxy.js'
+import { checkCredentials, loginRateLimit } from '../api/_lib/auth.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
@@ -66,6 +68,29 @@ app.use((_req, res, next) => {
     ].join('; '),
   )
   next()
+})
+
+/* ── Login/parol ──────────────────────────────────────────────────── */
+
+app.post('/api/login', express.json(), (req, res) => {
+  res.setHeader('cache-control', 'no-store')
+
+  const limit = loginRateLimit(clientIp(req))
+  if (!limit.ok) {
+    res.setHeader('retry-after', '300')
+    return res.status(429).json(apiError('RATE_LIMITED', "Juda ko'p urinish. Birozdan keyin qayta urinib ko'ring."))
+  }
+
+  if (!SERVER_TOKEN) {
+    return res.status(500).json(apiError('NO_SERVER_TOKEN', "Serverda UZUM_API_TOKEN sozlanmagan."))
+  }
+
+  const { username, password } = req.body || {}
+  if (!checkCredentials(username, password)) {
+    return res.status(401).json(apiError('INVALID_CREDENTIALS', "Login yoki parol noto'g'ri."))
+  }
+
+  res.status(200).json({ token: SERVER_TOKEN })
 })
 
 /* ── Uzum proxy ───────────────────────────────────────────────────── */
@@ -138,7 +163,8 @@ app.all('/api/uzum/*', async (req, res) => {
   }
 })
 
-// Serverda token bor-yo'qligini bilish — UI login ekranini o'tkazib yuborishi mumkin
+// Serverda token bor-yo'qligini bilish — Settings sahifasi shu asosda
+// xom tokenni ko'rsatish/tahrirlashni yashiradi (login/parol baribir talab qilinadi)
 app.get('/api/config', (_req, res) => {
   res.setHeader('cache-control', 'no-store')
   res.json({ serverToken: Boolean(SERVER_TOKEN), apiBase: API_BASE + API_PREFIX })

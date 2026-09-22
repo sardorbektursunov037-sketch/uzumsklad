@@ -193,19 +193,50 @@ export function cx(...parts) {
   return parts.flat(Infinity).filter(Boolean).join(' ')
 }
 
+/** Mahalliy kalendar sana kaliti (UTC emas) — kun bo'yicha guruhlash uchun */
+export function dayKey(value) {
+  const d = toDate(value)
+  if (!d) return null
+  const m = `${d.getMonth() + 1}`.padStart(2, '0')
+  const day = `${d.getDate()}`.padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}`
+}
+
 /* ===== Buyurtma muammolari ====================================== */
 
-/** Buyurtma "qotib qolgan" deb hisoblanadigan kunlar soni */
+/** Buyurtma yig'ish bosqichida "qotib qolgan" deb hisoblanadigan kunlar */
 export const STUCK_DAYS = 5
+
+/** Qabul punktida mijoz olib ketmagan deb hisoblanadigan kunlar */
+export const PICKUP_DAYS = 5
+
+/** Yo'lda (yetkazishda) haddan ortiq qolgan deb hisoblanadigan kunlar */
+export const TRANSIT_DAYS = 7
+
+/** Statuslar bo'yicha guruhlar — muammo turlarini aniqlashda ishlatiladi */
+const AT_POINT_STATUSES = ['ACCEPTED_AT_DP', 'DELIVERED', 'DELIVERED_TO_CUSTOMER_DELIVERY_POINT']
+const IN_TRANSIT_STATUSES = ['PENDING_DELIVERY', 'DELIVERING']
+const CLOSED_STATUSES = ['COMPLETED', 'CANCELED', 'RETURNED']
+
+/** Kunlarda farq (musbat = o'tgan vaqt) */
+const daysBetween = (value, now = Date.now()) => {
+  const d = toDate(value)
+  return d ? (now - d.getTime()) / 864e5 : null
+}
 
 /**
  * Buyurtmadagi muammolarni aniqlaydi.
  *
  * Uzum API muammoli buyurtmalar uchun alohida filtr bermaydi, shuning uchun
- * status va muddatlardan hisoblaymiz:
- *   - qabul muddati o'tgan (CREATED, acceptUntil < hozir)
- *   - uzoq vaqt qotib qolgan (CREATED/PACKING, 5 kundan ortiq)
- *   - bekor qilinish jarayonida (PENDING_CANCELLATION)
+ * status va muddatlardan hisoblaymiz. Aniqlanadigan turlar:
+ *
+ *   overdue         qabul muddati o'tgan (CREATED, acceptUntil < hozir)
+ *   stuck           tugallanmagan — CREATED/PACKING da 5 kundan ortiq
+ *   deliveryOverdue yetkazish muddati o'tgan (deliverUntil < hozir, yopilmagan)
+ *   inTransit       yo'lda qotib qolgan — DELIVERING/PENDING_DELIVERY da 7 kundan ortiq
+ *   notPickedUp     o'z vaqtida olinmagan — punktda 5 kundan ortiq yotibdi
+ *   cancelling      bekor qilinish jarayonida (PENDING_CANCELLATION)
+ *   returned        qaytarilgan (RETURNED)
  *
  * @returns {string[]} muammo kodlari; bo'sh massiv — muammo yo'q
  */
@@ -213,18 +244,39 @@ export function orderProblems(order) {
   if (!order) return []
   const problems = []
   const now = Date.now()
+  const status = order.status
 
-  if (order.status === 'CREATED') {
+  if (status === 'CREATED') {
     const until = toDate(order.acceptUntil)
     if (until && until.getTime() < now) problems.push('overdue')
   }
 
-  if (['CREATED', 'PACKING'].includes(order.status)) {
-    const created = toDate(order.dateCreated)
-    if (created && now - created.getTime() > STUCK_DAYS * 864e5) problems.push('stuck')
+  if (status === 'CREATED' || status === 'PACKING') {
+    const age = daysBetween(order.dateCreated, now)
+    if (age !== null && age > STUCK_DAYS) problems.push('stuck')
   }
 
-  if (order.status === 'PENDING_CANCELLATION') problems.push('cancelling')
+  // Yetkazish muddati — buyurtma hali yopilmagan bo'lsagina muammo
+  if (!CLOSED_STATUSES.includes(status)) {
+    const until = toDate(order.deliverUntil)
+    if (until && until.getTime() < now) problems.push('deliveryOverdue')
+  }
+
+  if (IN_TRANSIT_STATUSES.includes(status)) {
+    const since = daysBetween(order.deliveringDate ?? order.dateUpdated ?? order.dateCreated, now)
+    if (since !== null && since > TRANSIT_DAYS) problems.push('inTransit')
+  }
+
+  if (AT_POINT_STATUSES.includes(status)) {
+    const since = daysBetween(
+      order.deliveredToDeliveryPointDate ?? order.deliveryDate ?? order.acceptedDate ?? order.dateUpdated,
+      now,
+    )
+    if (since !== null && since > PICKUP_DAYS) problems.push('notPickedUp')
+  }
+
+  if (status === 'PENDING_CANCELLATION') problems.push('cancelling')
+  if (status === 'RETURNED') problems.push('returned')
 
   return problems
 }

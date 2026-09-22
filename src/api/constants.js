@@ -161,3 +161,50 @@ export const DROP_OFF_TYPES = [
 
 /** Sahifadagi yozuvlar soni variantlari */
 export const PAGE_SIZES = [10, 20, 50, 100]
+
+/* ===== Muammoli buyurtmalar ===================================== */
+
+/**
+ * Muammo turlari — `utils/format.js` dagi `orderProblems()` qaytaradigan
+ * kodlar. Tartib muhimlik bo'yicha: yuqoridagilari ko'proq e'tibor talab
+ * qiladi. `i18n` kaliti `problems.type.<kod>` ko'rinishida.
+ */
+export const ORDER_PROBLEMS = [
+  'overdue',
+  'deliveryOverdue',
+  'stuck',
+  'notPickedUp',
+  'inTransit',
+  'cancelling',
+  'returned',
+]
+
+export const ORDER_PROBLEM_TONE = {
+  overdue: 'danger',
+  deliveryOverdue: 'danger',
+  stuck: 'warning',
+  notPickedUp: 'warning',
+  inTransit: 'warning',
+  cancelling: 'danger',
+  returned: 'info',
+}
+
+/**
+ * Muammo qidirishda tekshiriladigan statuslar.
+ *
+ * `COMPLETED` va `CANCELED` chiqarib tashlangan: birinchisi muvaffaqiyatli
+ * yakunlangan, ikkinchisi allaqachon yopilgan — ikkalasi ham harakat talab
+ * qilmaydi, lekin soni bo'yicha eng katta guruh bo'lib, yuklashni
+ * sekinlashtiradi.
+ */
+export const PROBLEM_SCAN_STATUSES = [
+  'CREATED',
+  'PACKING',
+  'PENDING_DELIVERY',
+  'DELIVERING',
+  'DELIVERED',
+  'ACCEPTED_AT_DP',
+  'DELIVERED_TO_CUSTOMER_DELIVERY_POINT',
+  'PENDING_CANCELLATION',
+  'RETURNED',
+]

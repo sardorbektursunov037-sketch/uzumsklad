@@ -20,7 +20,14 @@ import {
   dbsCompleted,
   dbsRefund,
 } from '../api/endpoints'
-import { ORDER_STATUSES, ORDER_SCHEMES, CANCEL_REASONS, PAGE_SIZES, LABEL_SIZES } from '../api/constants'
+import {
+  ORDER_STATUSES,
+  ORDER_SCHEMES,
+  CANCEL_REASONS,
+  PAGE_SIZES,
+  LABEL_SIZES,
+  ORDER_PROBLEM_TONE,
+} from '../api/constants'
 import {
   money,
   num,
@@ -232,14 +239,8 @@ export default function Orders() {
           return (
             <div className="flex flex-wrap gap-1">
               {problems.map((p) => (
-                <Badge key={p} tone={p === 'overdue' ? 'danger' : 'warning'} size="sm">
-                  {t(
-                    p === 'overdue'
-                      ? 'orders.problemOverdue'
-                      : p === 'stuck'
-                        ? 'orders.problemStuck'
-                        : 'orders.problemCancelling',
-                  )}
+                <Badge key={p} tone={ORDER_PROBLEM_TONE[p] || 'warning'} size="sm">
+                  {t(`problems.type.${p}`)}
                 </Badge>
               ))}
             </div>
