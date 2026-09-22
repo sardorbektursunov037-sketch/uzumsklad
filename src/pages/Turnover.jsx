@@ -196,8 +196,11 @@ export default function Turnover() {
         perDay,
         // Qancha kunga yetadi — sotuv tezligi nolga teng bo'lsa hisoblanmaydi
         daysLeft: perDay > 0 ? g.stock / perDay : null,
-        // Nazariy farq: kirim − sof sotuv − joriy qoldiq
-        diff: g.hasReceipt ? g.received - netSold - g.stock : null,
+        // Nazariy farq: kirim − sotilgan − qaytarilgan − joriy qoldiq.
+        // Qaytarilgan AYRILADI (qo'shilmaydi!) — qaytgan tovar yo'qolmagan,
+        // u hisobga olingan. MoySklad'ning "потеряшки" hisobi bilan solishtirib
+        // tekshirildi: Uzumga berilgan − Sotilgan − Qaytarilganlar = Yo'qolgan.
+        diff: g.hasReceipt ? g.received - g.sold - g.returned - g.stock : null,
         unitPurchase: g.purchaseQty > 0 ? g.purchaseSum / g.purchaseQty : null,
       }
     })

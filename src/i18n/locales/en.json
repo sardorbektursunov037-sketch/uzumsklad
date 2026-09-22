@@ -1032,7 +1032,7 @@
     "notesTitle": "Important caveats",
     "noteStock": "“Current stock” is the FBS stock right now — it does not depend on the selected period.",
     "noteMatch": "The three endpoints return the same SKU in different fields — matching runs on barcode, then seller code, then title.",
-    "noteDiff": "“Discrepancy” only makes sense over the full history: received − net sold − current stock.",
+    "noteDiff": "“Discrepancy” only makes sense over the full history: received − sold − returned − current stock (this is lost stock).",
     "formula": "Net sold = Sold − Returned · Avg per day = Net sold / days in period · Lasts = Stock / avg per day",
     "sourceReceipts": "InvoiceWithSkuListDto.productForInvoiceDto — quantityAccepted",
     "sourceSales": "SellerOrderItemDto — amount, amountReturns",

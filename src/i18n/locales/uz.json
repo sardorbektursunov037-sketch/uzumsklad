@@ -1032,7 +1032,7 @@
     "notesTitle": "Muhim izohlar",
     "noteStock": "«Joriy qoldiq» — hozirgi FBS qoldig’i, u tanlangan davrga bog’liq emas.",
     "noteMatch": "Uchta endpoint bitta SKU ni har xil maydonlarda qaytaradi — moslashtirish shtrix-kod, sotuvchi kodi va nom ketma-ketligida bajariladi.",
-    "noteDiff": "«Farq» faqat butun tarix tanlanganda ma’noli: kirim − sof sotuv − joriy qoldiq.",
+    "noteDiff": "«Farq» faqat butun tarix tanlanganda ma’noli: kirim − sotilgan − qaytarilgan − joriy qoldiq (bu yo’qolgan/potentsial yo’qotilgan tovar).",
     "formula": "Sof sotuv = Sotilgan − Qaytarilgan · Kunlik o’rtacha = Sof sotuv / davr kunlari · Yetadi = Qoldiq / kunlik o’rtacha",
     "sourceReceipts": "InvoiceWithSkuListDto.productForInvoiceDto — quantityAccepted",
     "sourceSales": "SellerOrderItemDto — amount, amountReturns",
