@@ -5,8 +5,11 @@ import { Package, Tags, Printer, Store, Pencil, Radar, Boxes, ShieldAlert, Layer
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { useApi, useApiMessage, useAction } from '../hooks/useApi'
+import { useBulkLoad } from '../hooks/useBulkLoad'
 import { useDebounced } from '../hooks/misc'
 import { getProducts, updatePrices, getBarcodeTypes, printBarcodes } from '../api/endpoints'
+import { fetchProductsForShops } from '../api/bulk'
+import { cacheKey as ck } from '../api/cache'
 import { PRODUCT_SORT, PRODUCT_FILTERS, PRODUCT_RANKS, PAGE_SIZES } from '../api/constants'
 import { money, num, percent, cx, downloadBlob, dash } from '../utils/format'
 import {
@@ -37,21 +40,27 @@ export default function Products() {
   const toast = useToast()
   const message = useApiMessage()
 
+  /** "Barcha do'konlar" tanlanganda ham mahsulotlar ko'rinishi kerak */
+  const allShopsMode = !activeShopId && shops.length > 0
+  const shopIds = useMemo(() => shops.map((s) => s.id), [shops])
+  const idsKey = shopIds.join(',')
+
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [page, setPage] = useState(0)
   const [size, setSize] = useState(20)
   const search = useDebounced(filters.searchQuery, 450)
 
-  const [priceModal, setPriceModal] = useState(null) // { product }
-  const [labelModal, setLabelModal] = useState(null) // { skus: [...] }
-  const [tracking, setTracking] = useState(null) // { sku, product }
+  const [priceModal, setPriceModal] = useState(null) // { product, shopId }
+  const [labelModal, setLabelModal] = useState(null) // { skus: [...], shopId }
+  const [tracking, setTracking] = useState(null) // { sku, product, shopId }
 
   // Filtr o'zgarganda birinchi sahifaga qaytamiz
   useEffect(() => {
     setPage(0)
   }, [search, filters.sortBy, filters.order, filters.filter, filters.productRank, activeShopId])
 
-  const { data, loading, error, refetch } = useApi(
+  /* ── Bitta do'kon: server o'zi sahifalaydi, saralaydi, filtrlaydi ── */
+  const single = useApi(
     (signal) =>
       getProducts(
         activeShopId,
@@ -70,8 +79,49 @@ export default function Products() {
     { skip: !activeShopId, keepPreviousData: true },
   )
 
-  const products = useMemo(() => data?.productList || [], [data])
-  const total = data?.totalProductsAmount
+  /**
+   * "Barcha do'konlar": Uzum'ning `/v1/product/shop/{shopId}` endpointi bir
+   * vaqtda faqat bitta do'kon uchun ishlaydi, shuning uchun har bir do'kon
+   * alohida to'liq yuklanadi (`fetchProductsForShops`), so'ng qidiruv va
+   * sahifalash shu yerda (brauzerda) qilinadi. Server saralash/filtrlash
+   * bu rejimda ishlamaydi — ular faqat bitta do'kon tanlanganda ishlaydi.
+   */
+  const bulk = useBulkLoad(
+    (signal, onProgress) => fetchProductsForShops(shopIds, signal, onProgress),
+    [idsKey],
+    { skip: !allShopsMode, cacheKey: ck('products-all', { ids: idsKey }) },
+  )
+
+  const allProducts = useMemo(() => bulk.data?.products || [], [bulk.data])
+
+  const filteredAll = useMemo(() => {
+    if (!search) return allProducts
+    const q = search.toLowerCase()
+    return allProducts.filter(
+      (p) =>
+        String(p.title || '').toLowerCase().includes(q) ||
+        String(p.category || '').toLowerCase().includes(q) ||
+        (p.skuList || []).some(
+          (s) =>
+            String(s.skuTitle || s.skuFullTitle || '').toLowerCase().includes(q) ||
+            String(s.barcode || '').includes(q) ||
+            String(s.sellerItemCode || '').toLowerCase().includes(q),
+        ),
+    )
+  }, [allProducts, search])
+
+  const allPageRows = useMemo(
+    () => filteredAll.slice(page * size, (page + 1) * size),
+    [filteredAll, page, size],
+  )
+
+  const data = single.data
+  const loading = allShopsMode ? bulk.loading : single.loading
+  const error = allShopsMode ? bulk.error : single.error
+  const refetch = allShopsMode ? bulk.reload : single.refetch
+
+  const products = allShopsMode ? allPageRows : data?.productList || []
+  const total = allShopsMode ? filteredAll.length : data?.totalProductsAmount
 
   const set = (patch) => setFilters((f) => ({ ...f, ...patch }))
 
@@ -85,6 +135,11 @@ export default function Products() {
       blocked: skus.filter((s) => s.blocked).length,
     }
   }, [products])
+
+  const shopName = useMemo(() => {
+    const map = new Map(shops.map((s) => [s.id, s.name]))
+    return (id) => map.get(id) || (id ? `#${id}` : '—')
+  }, [shops])
 
   /* ── Ustunlar ────────────────────────────────────────────────── */
 
@@ -104,6 +159,15 @@ export default function Products() {
           />
         ),
       },
+      ...(allShopsMode
+        ? [
+            {
+              key: 'shop',
+              header: t('common.shop'),
+              render: (p) => <span className="text-muted text-[13px]">{shopName(p.shopId)}</span>,
+            },
+          ]
+        : []),
       {
         key: 'status',
         header: t('common.status'),
@@ -190,7 +254,7 @@ export default function Products() {
               variant="ghost"
               onClick={(e) => {
                 e.stopPropagation()
-                setPriceModal({ product: p })
+                setPriceModal({ product: p, shopId: p.shopId ?? activeShopId })
               }}
               title={t('products.editPrice')}
               aria-label={t('products.editPrice')}
@@ -202,7 +266,7 @@ export default function Products() {
               variant="ghost"
               onClick={(e) => {
                 e.stopPropagation()
-                setLabelModal({ skus: p.skuList || [], title: p.title })
+                setLabelModal({ skus: p.skuList || [], title: p.title, shopId: p.shopId ?? activeShopId })
               }}
               title={t('products.printLabels')}
               aria-label={t('products.printLabels')}
@@ -213,7 +277,7 @@ export default function Products() {
         ),
       },
     ],
-    [t, lang],
+    [t, lang, allShopsMode, shopName, activeShopId],
   )
 
   /* ── SKU jadvali (yoyilgan qator) ────────────────────────────── */
@@ -278,7 +342,7 @@ export default function Products() {
                     size="sm"
                     variant="secondary"
                     icon={Radar}
-                    onClick={() => setTracking({ sku: s, product: p })}
+                    onClick={() => setTracking({ sku: s, product: p, shopId: p.shopId ?? activeShopId })}
                   >
                     {t('products.tracking')}
                   </Button>
@@ -298,18 +362,14 @@ export default function Products() {
     )
   }
 
-  /* ── Do'kon tanlanmagan ──────────────────────────────────────── */
+  /* ── Hech qanday do'kon yo'q ─────────────────────────────────── */
 
-  if (!activeShopId) {
+  if (shops.length === 0) {
     return (
       <>
         <PageHeader title={t('products.title')} subtitle={t('products.subtitle')} />
         <Card>
-          <EmptyState
-            icon={Store}
-            title={t('errors.noShopSelected')}
-            hint={shops.length ? t('errors.shopRequired') : t('dashboard.noShop')}
-          />
+          <EmptyState icon={Store} title={t('errors.noShopSelected')} hint={t('dashboard.noShop')} />
         </Card>
       </>
     )
@@ -317,10 +377,12 @@ export default function Products() {
 
   return (
     <>
-      <PageHeader title={t('products.title')} subtitle={activeShop?.name || t('products.subtitle')}>
-        <Button variant="secondary" icon={Tags} onClick={() => setLabelModal({ skus: [], title: null })}>
-          {t('products.printLabels')}
-        </Button>
+      <PageHeader title={t('products.title')} subtitle={activeShop?.name || (allShopsMode ? t('common.allShops') : t('products.subtitle'))}>
+        {!allShopsMode && (
+          <Button variant="secondary" icon={Tags} onClick={() => setLabelModal({ skus: [], title: null, shopId: activeShopId })}>
+            {t('products.printLabels')}
+          </Button>
+        )}
       </PageHeader>
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -339,26 +401,37 @@ export default function Products() {
       <DevSource
         className="mb-4"
         compact
-        sources={[
-          {
-            path: '/v1/product/shop/{shopId}',
-            params: {
-              shopId: activeShopId,
-              page,
-              size,
-              searchQuery: search || undefined,
-              sortBy: filters.sortBy || undefined,
-              order: filters.order || undefined,
-              filter: filters.filter || undefined,
-              productRank: filters.productRank || undefined,
-            },
-            count: products.length,
-            note: 'AllProducts.productList + totalProductsAmount',
-          },
-          { path: '/v1/product/barcodes/types', note: 'Etiketka chop etish oynasi' },
-          { method: 'POST', path: '/v1/product/{shopId}/sendPriceData', note: 'Narx tahriri' },
-          { method: 'POST', path: '/v1/product/shop/{shopId}/barcodes/print', note: 'Etiketka PDF' },
-        ]}
+        sources={
+          allShopsMode
+            ? [
+                {
+                  path: '/v1/product/shop/{shopId}',
+                  params: { shopIds, filter: 'ALL' },
+                  count: allProducts.length,
+                  note: t('products.allShopsSourceNote'),
+                },
+              ]
+            : [
+                {
+                  path: '/v1/product/shop/{shopId}',
+                  params: {
+                    shopId: activeShopId,
+                    page,
+                    size,
+                    searchQuery: search || undefined,
+                    sortBy: filters.sortBy || undefined,
+                    order: filters.order || undefined,
+                    filter: filters.filter || undefined,
+                    productRank: filters.productRank || undefined,
+                  },
+                  count: products.length,
+                  note: 'AllProducts.productList + totalProductsAmount',
+                },
+                { path: '/v1/product/barcodes/types', note: 'Etiketka chop etish oynasi' },
+                { method: 'POST', path: '/v1/product/{shopId}/sendPriceData', note: 'Narx tahriri' },
+                { method: 'POST', path: '/v1/product/shop/{shopId}/barcodes/print', note: 'Etiketka PDF' },
+              ]
+        }
       />
 
       <FilterBar onReset={() => setFilters(DEFAULT_FILTERS)}>
@@ -375,6 +448,8 @@ export default function Products() {
           placeholder={t('common.all')}
           options={PRODUCT_FILTERS.map((v) => ({ value: v, label: t(`enums.productFilter.${v}`) }))}
           wrapperClassName="w-40"
+          disabled={allShopsMode}
+          title={allShopsMode ? t('products.filterNeedsOneShop') : undefined}
         />
         <Select
           label={t('products.rank')}
@@ -383,6 +458,8 @@ export default function Products() {
           placeholder={t('common.all')}
           options={PRODUCT_RANKS.map((v) => ({ value: v, label: t(`enums.rank.${v}`) }))}
           wrapperClassName="w-36"
+          disabled={allShopsMode}
+          title={allShopsMode ? t('products.filterNeedsOneShop') : undefined}
         />
         <Select
           label={t('common.sortBy')}
@@ -391,6 +468,8 @@ export default function Products() {
           placeholder={t('enums.productSort.DEFAULT')}
           options={PRODUCT_SORT.map((v) => ({ value: v, label: t(`enums.productSort.${v}`) }))}
           wrapperClassName="w-40"
+          disabled={allShopsMode}
+          title={allShopsMode ? t('products.filterNeedsOneShop') : undefined}
         />
         <Select
           label={t('common.order')}
@@ -402,13 +481,17 @@ export default function Products() {
             { value: 'DESC', label: t('common.desc') },
           ]}
           wrapperClassName="w-36"
+          disabled={allShopsMode}
+          title={allShopsMode ? t('products.filterNeedsOneShop') : undefined}
         />
       </FilterBar>
+
+      {allShopsMode && <p className="text-faint mb-3 text-[12.5px]">{t('products.allShopsHint')}</p>}
 
       <DataTable
         columns={columns}
         rows={products}
-        rowKey={(p) => p.productId}
+        rowKey={(p) => `${p.shopId ?? activeShopId}-${p.productId}`}
         loading={loading}
         error={error ? message(error) : null}
         onRetry={refetch}
@@ -423,7 +506,7 @@ export default function Products() {
       {priceModal && (
         <PriceModal
           product={priceModal.product}
-          shopId={activeShopId}
+          shopId={priceModal.shopId}
           onClose={() => setPriceModal(null)}
           onSaved={() => {
             setPriceModal(null)
@@ -438,13 +521,13 @@ export default function Products() {
         onClose={() => setTracking(null)}
         sku={tracking?.sku}
         product={tracking?.product}
-        shopId={activeShopId}
+        shopId={tracking?.shopId ?? activeShopId}
       />
 
       {labelModal && (
         <LabelModal
           skus={labelModal.skus.length ? labelModal.skus : products.flatMap((p) => p.skuList || [])}
-          shopId={activeShopId}
+          shopId={labelModal.shopId ?? activeShopId}
           onClose={() => setLabelModal(null)}
         />
       )}

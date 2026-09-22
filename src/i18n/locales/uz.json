@@ -250,7 +250,10 @@
     "totalActive": "Faol qoldiq",
     "totalFbs": "FBS qoldiq",
     "totalBlocked": "Bloklangan SKU",
-    "noSalesForSku": "Tanlangan davrda bu SKU bo'yicha sotuv topilmadi"
+    "noSalesForSku": "Tanlangan davrda bu SKU bo'yicha sotuv topilmadi",
+    "allShopsSourceNote": "Har bir do'kon uchun alohida so'raladi, natijalar birlashtiriladi",
+    "allShopsHint": "\"Barcha do'konlar\" rejimida faqat qidiruv ishlaydi — filtr/saralash uchun bitta do'kon tanlang",
+    "filterNeedsOneShop": "Bu filtr faqat bitta do'kon tanlanganda ishlaydi"
   },
   "orders": {
     "title": "Buyurtmalar",

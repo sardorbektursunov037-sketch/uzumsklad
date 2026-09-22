@@ -250,7 +250,10 @@
     "totalActive": "Active stock",
     "totalFbs": "FBS stock",
     "totalBlocked": "Blocked SKUs",
-    "noSalesForSku": "No sales for this SKU in the selected period"
+    "noSalesForSku": "No sales for this SKU in the selected period",
+    "allShopsSourceNote": "Requested separately per shop, results are merged",
+    "allShopsHint": "In \"All shops\" mode only search works — pick one shop for filtering/sorting",
+    "filterNeedsOneShop": "This filter only works when one shop is selected"
   },
   "orders": {
     "title": "Orders",
